@@ -56,10 +56,12 @@ class SpeedTest(object):
 
     ALPHABET = string.digits + string.ascii_letters
 
-    def __init__(self, host=None, http_debug=0, runs=2):
+    def __init__(self, host=None, http_debug=0, runs=2, proxy_host=None, proxy_port=None):
         self._host = host
         self.http_debug = http_debug
         self.runs = runs
+        self.proxy_host = proxy_host
+        self.proxy_port = proxy_port
 
     @property
     def host(self):
@@ -73,8 +75,16 @@ class SpeedTest(object):
 
     def connect(self, url):
         try:
-            connection = HTTPConnection(url)
+
+            if self.proxy_host and self.proxy_port:
+                LOG.info('proxy host: %s', self.proxy_host)
+                LOG.info('proxy port: %d', self.proxy_port)
+                connection = HTTPConnection(self.proxy_host, self.proxy_port)
+            else:
+                connection = HTTPConnection(url)
             connection.set_debuglevel(self.http_debug)
+            if self.proxy_host and self.proxy_port:
+                connection.set_tunnel(url, port=80)
             connection.connect()
             return connection
         except:
@@ -183,7 +193,7 @@ class SpeedTest(object):
         return total_ms
 
     def chooseserver(self):
-        connection = self.connect('www.speedtest.net')
+        connection = self.connect('c.speedtest.net')
         now = int(time() * 1000)
         # really contribute to speedtest.net OS statistics
         # maybe they won't block us again...
@@ -206,7 +216,7 @@ class SpeedTest(object):
         LOG.info('Your latitude: %s', location[1])
         LOG.info('Your longitude: %s', location[2])
         connection.request(
-            'GET', '/speedtest-servers.php?x=%d' % now, None, extra_headers)
+            'GET', '/speedtest-servers-static.php?x=%d' % now, None, extra_headers)
         response = connection.getresponse()
         reply = response.read().decode('utf-8')
         server_list = re.findall(
@@ -325,6 +335,13 @@ def parseargs(args):
         help='use specific server',
         metavar='H')
     parser.add_argument(
+        '-ph', '--proxy-host',
+        help='use specific proxy server host')
+    parser.add_argument(
+        '-pp', '--proxy-port',
+        help='use specific proxy server port',
+        type=positive_int)
+    parser.add_argument(
         '-f', '--format',
         default='default',
         help='output format ' + str(__supported_formats__),
@@ -344,7 +361,7 @@ def parseargs(args):
 
 
 def perform_speedtest(opts):
-    speedtest = SpeedTest(opts.server, opts.debug, opts.runs)
+    speedtest = SpeedTest(opts.server, opts.debug, opts.runs, opts.proxy_host, opts.proxy_port)
 
     if opts.format in __supported_formats__:
 
